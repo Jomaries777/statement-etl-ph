@@ -1,0 +1,50 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "statement-etl-ph"
+version = "0.1.0"
+description = "Read GCash, GoTyme and Grab statements into checked transactions, a CSV, or a Money Manager import."
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+authors = [{ name = "statement-etl-ph contributors" }]
+keywords = ["gcash", "gotyme", "grab", "philippines", "bank statement", "pdf", "budget"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+    "Topic :: Office/Business :: Financial :: Accounting",
+]
+# Parsing a statement you already have needs nothing else.
+dependencies = ["pdfplumber>=0.11.4"]
+
+[project.optional-dependencies]
+gmail = [
+    "google-api-python-client>=2.140.0",
+    "google-auth>=2.34.0",
+    "google-auth-oauthlib>=1.2.1",
+    "google-auth-httplib2>=0.2.0",
+]
+dev = ["pytest>=8.3.0", "reportlab>=4.2.0", "pikepdf>=9.0.0"]
+
+[project.scripts]
+statement-etl-ph = "statement_etl_ph.cli:main"
+
+[project.urls]
+Issues = "https://github.com/Jomaries777/statement-etl-ph/issues"
+Source = "https://github.com/Jomaries777/statement-etl-ph"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/statement_etl_ph"]
+
+[tool.hatch.build.targets.sdist]
+include = ["src/", "tests/", "README.md", "LICENSE", "docs/"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

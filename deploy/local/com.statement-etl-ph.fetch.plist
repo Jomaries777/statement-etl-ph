@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Runs `statement-etl-ph fetch` every hour while you are logged in.
+  Edit the three paths below, copy this file to ~/Library/LaunchAgents/, then:
+    launchctl load ~/Library/LaunchAgents/com.statement-etl-ph.fetch.plist
+-->
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.statement-etl-ph.fetch</string>
+  <key>ProgramArguments</key>
+  <array>
+    <!-- The output of `which statement-etl-ph` -->
+    <string>/Users/YOU/.local/bin/statement-etl-ph</string>
+    <string>fetch</string>
+  </array>
+  <key>StartInterval</key>
+  <integer>3600</integer>
+  <key>RunAtLoad</key>
+  <true/>
+  <key>StandardOutPath</key>
+  <string>/Users/YOU/Library/Logs/statement-etl-ph.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/YOU/Library/Logs/statement-etl-ph.log</string>
+</dict>
+</plist>

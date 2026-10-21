@@ -1,0 +1,10 @@
+# Runs `statement-etl-ph fetch` once. The .timer next to this decides when.
+# Copy both to ~/.config/systemd/user/, edit ExecStart, then:
+#   systemctl --user enable --now statement-etl-ph.timer
+[Unit]
+Description=Convert new bank statements from Gmail
+
+[Service]
+Type=oneshot
+# The output of `which statement-etl-ph`
+ExecStart=%h/.local/bin/statement-etl-ph fetch

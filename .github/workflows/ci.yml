@@ -1,0 +1,87 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+    tags: ["v*"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e '.[dev,gmail]'
+      - run: pytest -q
+
+  # Parsing a statement must need nothing but pdfplumber. An import that
+  # sneaks a Gmail or other optional dependency into the core fails here.
+  core-only:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install .
+      - run: statement-etl-ph --version
+      - run: python -c "import statement_etl_ph.banks, statement_etl_ph.cli, statement_etl_ph.sinks.money_manager"
+      - name: Fail if the Google client came along
+        run: "! pip show google-api-python-client"
+
+  # This repository must never hold a real statement, a token or a client
+  # secret. The only PDFs allowed are the generated synthetic fixtures.
+  privacy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: No PDFs except the synthetic fixtures
+        run: |
+          found=$(git ls-files '*.pdf' '*.PDF' | grep -vE '^tests/fixtures/synthetic_[a-z_]+\.pdf$' || true)
+          if [ -n "$found" ]; then echo "::error::Unexpected PDF committed: $found"; exit 1; fi
+      - name: No tokens, client secrets or config files with passwords
+        run: |
+          found=$(git ls-files | grep -iE '(^|/)(token\.json|client_secret[^/]*\.json|statement-etl-ph\.json|\.env)$' || true)
+          if [ -n "$found" ]; then echo "::error::Secret-bearing file committed: $found"; exit 1; fi
+
+  build:
+    needs: [test, core-only, privacy]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build
+      - run: python -m build
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/
+
+  # Publishes only on a version tag, with PyPI trusted publishing: no API
+  # token is stored in this repository. Configure the trusted publisher on
+  # pypi.org (repository, workflow ci.yml, environment pypi) before tagging.
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - uses: pypa/gh-action-pypi-publish@release/v1

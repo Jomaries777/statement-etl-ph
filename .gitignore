@@ -1,0 +1,17 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+dist/
+build/
+.pytest_cache/
+
+# Never commit a real statement, a token or a config with passwords in it.
+*.pdf
+!tests/fixtures/synthetic_*.pdf
+token.json
+client_secret*.json
+statement-etl-ph.json
+*_moneymanager.csv
+.env

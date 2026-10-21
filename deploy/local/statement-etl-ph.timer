@@ -1,0 +1,10 @@
+[Unit]
+Description=Run statement-etl-ph fetch every hour
+
+[Timer]
+OnCalendar=hourly
+# Catch up after the machine was off or asleep.
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,50 @@
+name: A statement doesn't parse
+description: A statement is rejected, reads the wrong amounts, or fails to reconcile.
+labels: ["parser"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **Do not attach your statement, a screenshot of it, or any real values from it.** That includes names, account or mobile numbers, card digits, reference numbers and your PDF password. This issue is public.
+
+        Everything needed to fix a parser is the layout: which headers exist, where the columns sit, and what a row looks like. Describe that with invented values, and we'll build a synthetic statement from it.
+  - type: dropdown
+    id: bank
+    attributes:
+      label: Bank
+      options: ["gcash", "gotyme", "grab", "other (a new bank)"]
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "Output of `statement-etl-ph --version`"
+    validations:
+      required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: The error message, or which column the wrong amounts landed in. Replace real values with invented ones of the same shape (e.g. 0000123456789).
+    validations:
+      required: true
+  - type: textarea
+    id: verbose
+    attributes:
+      label: "Column positions from -v"
+      description: "Run `statement-etl-ph your.pdf --bank <bank> --dry-run -v` and paste the DEBUG lines that mention columns. They contain positions, not amounts; check before pasting."
+      render: text
+  - type: textarea
+    id: layout
+    attributes:
+      label: A synthetic example of the problem row
+      description: Type out the row that breaks, with invented values, in the order the statement prints it. Note anything unusual (wrapped text, a blank description, a missing column).
+      render: text
+  - type: checkboxes
+    id: privacy
+    attributes:
+      label: Privacy
+      options:
+        - label: I have not included any real statement, screenshot, number, name or password.
+          required: true
