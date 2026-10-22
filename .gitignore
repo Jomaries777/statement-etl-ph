@@ -15,3 +15,4 @@ client_secret*.json
 statement-etl-ph.json
 *_moneymanager.csv
 .env
+.DS_Store

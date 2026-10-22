@@ -29,7 +29,7 @@ Add `--dry-run` to see the rows without writing anything, and `--to csv` for a p
 
 GCash prints some inbound bank transfers with **no description at all**. A parser that matches a list of descriptions to a list of amounts by position shifts every later amount onto the wrong row, then drops the last one, and reports no error. This package reads the page as a grid, keeps the blank row, and then proves nothing moved: the debits and credits it read must equal the statement's printed Total Debit and Total Credit. If they don't, nothing is written (unless you pass `--force`).
 
-It also reports what the bank's own arithmetic leaves out. GCash sometimes refunds a cancelled booking without printing a row, and the running balance is the only evidence. Such refunds, and any other gap the balance proves but nothing explains, are listed in the output rather than hidden. They're never written as rows: add them yourself if you want them.
+It also reports what the bank's own arithmetic leaves out. GCash sometimes refunds a cancelled booking without printing a row, and the running balance is the only evidence. Such a refund is written as its own row (named after the charge, e.g. `<merchant> refund`, and an Income row in Money Manager) only when it exactly reverses a printed charge, so your tracker's balance matches the app's. `--skip-refunds` leaves them out. Any other gap the balance proves but nothing explains is listed in the output and never written.
 
 ## Supported banks and e-wallets
 
