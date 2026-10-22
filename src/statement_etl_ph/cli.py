@@ -11,9 +11,11 @@ A file on its own is parsed; ``parse`` is the subcommand it implies.
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import logging
 import sys
 import tempfile
+from decimal import Decimal
 from pathlib import Path
 from typing import Optional
 
@@ -22,7 +24,7 @@ from .banks import available as available_banks
 from .banks import get_bank
 from .banks.base import BankDefinition
 from .config import Config, default_config_path, load_config, write_template
-from .models import Statement, StatementParseError
+from .models import Statement, StatementParseError, Transaction
 from .sinks import SINKS, SendResult
 from .sinks import available as available_sinks
 
@@ -35,8 +37,14 @@ _SUBCOMMANDS = ("parse", "fetch", "auth", "init")
 
 
 def _print_statement(statement: Statement) -> None:
-    period = f"{statement.period_start or '?'} to {statement.period_end or '?'}"
-    print(f"Period {period}: {len(statement.transactions)} transaction(s)")
+    days = [t.value_date for t in statement.transactions]
+    if statement.period_start and statement.period_end:
+        period = f"Period {statement.period_start} to {statement.period_end}"
+    elif days:
+        period = f"Period not printed; the rows run {min(days)} to {max(days)}"
+    else:
+        period = "Period not printed"
+    print(f"{period}: {len(statement.transactions)} transaction(s)")
     for txn in statement.transactions:
         amount = f"{txn.signed_amount:+,.2f}"
         balance = "" if txn.balance is None else f"{txn.balance:,.2f}"
@@ -48,7 +56,31 @@ def _print_statement(statement: Statement) -> None:
         print(f"  note: {note}")
 
 
-def _print_reconciliation(statement: Statement) -> bool:
+def _refund_rows(statement: Statement) -> list[Transaction]:
+    """Refunds only the balance column shows, as rows a tracker can import.
+
+    Each one exactly reverses a printed charge (see ``RecoveredRow``), so
+    writing it is what keeps the tracker's balance equal to the app's. It is
+    named after the charge, and its reference is the charge's with an ``R``
+    in front, so re-importing the statement finds it as a duplicate.
+    """
+    return [
+        dataclasses.replace(
+            row.as_transaction(), description=f"{row.merchant or 'Charge'} refund"
+        )
+        for row in statement.recover_unprinted_rows()
+    ]
+
+
+def _balance_gap(statement: Statement) -> Optional[Decimal]:
+    """How far the printed ending balance is from what the rows add up to."""
+    if statement.starting_balance is None or statement.ending_balance is None:
+        return None
+    moved = sum((t.signed_amount for t in statement.transactions), Decimal("0"))
+    return statement.ending_balance - (statement.starting_balance + moved)
+
+
+def _print_reconciliation(statement: Statement, write_refunds: bool) -> bool:
     result = statement.reconcile()
     if result.ok:
         print("reconcile: ok (the rows add up to the totals the statement prints)")
@@ -56,14 +88,31 @@ def _print_reconciliation(statement: Statement) -> bool:
         print(f"reconcile: ERROR {error}")
     for warning in result.warnings:
         print(f"reconcile: warning {warning}")
-    for row in statement.recover_unprinted_rows():
+    recovered = statement.recover_unprinted_rows()
+    fate = "written as a refund row" if write_refunds else "not written (--skip-refunds)"
+    for row in recovered:
         print(
             f"reconcile: note the balance shows {row.amount:+,.2f} on "
             f"{row.posted_at:%Y-%m-%d} reversing {row.merchant or 'a charge'} "
-            f"({row.offsets.reference_no}), with no row printed; it is not written"
+            f"({row.offsets.reference_no}), with no row printed; {fate}"
         )
     for gap in statement.unexplained_gaps():
         print(f"reconcile: warning {gap.describes}")
+
+    gap = _balance_gap(statement)
+    if gap:
+        explained = sum((r.amount for r in recovered), Decimal("0")) if write_refunds else 0
+        left = gap - explained
+        if explained and not left:
+            print(
+                f"reconcile: ok the {len(recovered)} refund row(s) cover the whole "
+                f"{gap:+,.2f}; your tracker's balance will match the app's"
+            )
+        else:
+            print(
+                f"reconcile: warning your tracker's balance will differ from the app's "
+                f"by {left:+,.2f}"
+            )
     return result.ok
 
 
@@ -134,14 +183,18 @@ def _deliver(
 ) -> int:
     """Print, check, and hand the rows to the sink. Returns an exit code."""
     _print_statement(statement)
-    if not _print_reconciliation(statement) and not args.force:
+    write_refunds = not args.skip_refunds
+    if not _print_reconciliation(statement, write_refunds) and not args.force:
         print(
             "Nothing written: the rows do not match the statement's own totals, so "
             "something was misread. --force writes them anyway.",
             file=sys.stderr,
         )
         return 1
-    if not statement.transactions:
+    rows = list(statement.transactions)
+    if write_refunds:
+        rows = sorted(rows + _refund_rows(statement), key=lambda t: t.posted_at)
+    if not rows:
         return 0
 
     to = args.to or config.output.get("to") or "csv"
@@ -150,7 +203,7 @@ def _deliver(
     if to == "moneymanager":
         options["date_format"] = args.date_format or config.output.get("date_format") or "%Y-%m-%d"
     sink = factory(_output_path(args.out, config, bank, statement, suffix), **options)
-    result = sink.send(config.account_name(bank, args.account_name), statement.transactions)
+    result = sink.send(config.account_name(bank, args.account_name), rows)
     _print_result(result, args.dry_run)
     return 0 if result.ok else 1
 
@@ -265,6 +318,8 @@ def _add_output_options(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--account-name", help="the Account column value (default: the bank's name)")
     parser.add_argument("--date-format", help="Money Manager date format (default: %%Y-%%m-%%d)")
     parser.add_argument("--dry-run", action="store_true", help="print the rows; write nothing")
+    parser.add_argument("--skip-refunds", action="store_true",
+                        help="leave out refunds that only the running balance shows")
     parser.add_argument("--force", action="store_true",
                         help="write even when the rows do not reconcile with the printed totals")
 

@@ -180,7 +180,8 @@ def test_a_fetch_that_cannot_parse_is_not_labelled(tmp_path, monkeypatch):
     assert gmail.labelled == []
 
 
-def test_a_refund_the_statement_never_printed_is_reported(tmp_path, monkeypatch, capsys):
+def _statement_with_an_unprinted_refund():
+    """A ₱59 ride GCash charged and refunded, with only the balance showing the refund."""
     from datetime import datetime as dt
     from decimal import Decimal
 
@@ -190,10 +191,50 @@ def test_a_refund_the_statement_never_printed_is_reported(tmp_path, monkeypatch,
                          debit=Decimal("59.00"), balance=Decimal("941.00"))
     later = Transaction(dt(2026, 9, 7, 8), "Payment to Sample Bakery", "A2",
                         debit=Decimal("115.00"), balance=Decimal("885.00"))
-    statement = Statement(None, None, Decimal("1000.00"), Decimal("885.00"),
-                          None, None, [charge, later])
-    monkeypatch.setattr(cli, "_parse", lambda b, p, pw: statement)
-    assert cli.main([str(FIXTURE), "--bank", "gcash", "--out", str(tmp_path)]) == 0
+    return Statement(None, None, Decimal("1000.00"), Decimal("885.00"),
+                     None, None, [charge, later])
+
+
+def test_a_refund_the_statement_never_printed_is_written(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "_parse", lambda b, p, pw: _statement_with_an_unprinted_refund())
+    out_file = tmp_path / "mm.csv"
+    assert cli.main([str(FIXTURE), "--bank", "gcash", "--to", "moneymanager",
+                     "--out", str(out_file)]) == 0
     out = capsys.readouterr().out
     assert "+59.00" in out and "Sample Rides (A1)" in out
-    assert "it is not written" in out
+    assert "written as a refund row" in out
+    assert "cover the whole +59.00; your tracker's balance will match" in out
+
+    rows = _rows(out_file)
+    assert [(r["Description"], r["Income/Expense"], r["Amount"]) for r in rows] == [
+        ("Sample Rides (ref A1)", "Expense", "59.00"),
+        ("Sample Rides refund (ref RA1)", "Income", "59.00"),
+        ("Sample Bakery (ref A2)", "Expense", "115.00"),
+    ]
+
+
+def test_skip_refunds_leaves_them_out_and_says_what_that_costs(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "_parse", lambda b, p, pw: _statement_with_an_unprinted_refund())
+    out_file = tmp_path / "mm.csv"
+    assert cli.main([str(FIXTURE), "--bank", "gcash", "--to", "moneymanager",
+                     "--out", str(out_file), "--skip-refunds"]) == 0
+    out = capsys.readouterr().out
+    assert "not written (--skip-refunds)" in out
+    assert "your tracker's balance will differ from the app's by +59.00" in out
+    assert len(_rows(out_file)) == 2
+
+
+def test_a_refund_row_is_a_duplicate_on_the_second_export(tmp_path, monkeypatch, capsys):
+    monkeypatch.setattr(cli, "_parse", lambda b, p, pw: _statement_with_an_unprinted_refund())
+    out_file = tmp_path / "rows.csv"
+    args = [str(FIXTURE), "--bank", "gcash", "--to", "csv", "--out", str(out_file)]
+    assert cli.main(args) == 0
+    assert cli.main(args) == 0
+    assert "3 already there" in capsys.readouterr().out
+    assert len(_rows(out_file)) == 3
+
+
+def test_a_statement_without_a_printed_period_names_its_row_dates(monkeypatch, capsys):
+    monkeypatch.setattr(cli, "_parse", lambda b, p, pw: _statement_with_an_unprinted_refund())
+    assert cli.main([str(FIXTURE), "--bank", "gcash", "--dry-run"]) == 0
+    assert "Period not printed; the rows run 2026-09-07 to 2026-09-07" in capsys.readouterr().out

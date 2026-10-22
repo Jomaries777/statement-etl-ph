@@ -8,4 +8,4 @@
         print(txn.value_date, txn.signed_amount, txn.merchant)
 """
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"

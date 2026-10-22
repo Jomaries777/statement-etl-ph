@@ -328,8 +328,8 @@ class Statement:
                     f"- debits {summed_debit} + credits {summed_credit} = {expected}, "
                     f"but the printed ending balance is {self.ending_balance} "
                     f"(off by {self.ending_balance - expected:+}). The transaction rows "
-                    "still match the printed totals, so they are being imported as-is; "
-                    "your tracker's balance will differ from the bank's app by this amount."
+                    "still match the printed totals; the notes below say what the "
+                    "running balance shows moved without a row."
                 )
 
         return Reconciliation(errors=errors, warnings=warnings)
