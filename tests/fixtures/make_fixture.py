@@ -135,7 +135,8 @@ def build(
             encryption=pikepdf.Encryption(owner=PASSWORD, user=PASSWORD, R=4),
         )
     unencrypted.unlink()
-    print(f"wrote {output} (password: {PASSWORD})")
+    # The password is synthetic, but nothing here prints a password: see PASSWORD above.
+    print(f"wrote {output} (encrypted with PASSWORD from this script)")
     return output
 
 
