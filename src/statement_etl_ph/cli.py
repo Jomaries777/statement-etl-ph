@@ -1,6 +1,7 @@
 """The ``statement-etl-ph`` command.
 
     statement-etl-ph statement.pdf --bank gcash --to moneymanager
+    statement-etl-ph statement.pdf --bank gcash --to ynab
     statement-etl-ph fetch --bank gcash --to csv --out ~/Statements/
     statement-etl-ph auth client_secret.json
     statement-etl-ph init
@@ -175,6 +176,26 @@ def _output_path(
     return folder / f"{stem}_{suffix}" if suffix != "csv" else folder / f"{stem}.csv"
 
 
+def _ynab_options(args: argparse.Namespace, config: Config, bank: BankDefinition) -> dict:
+    """The YNAB sink's settings, with one client for the whole run.
+
+    Sharing the client means ``fetch`` reads the budget's accounts once, not
+    once per statement, out of YNAB's 200 requests an hour.
+    """
+    from .sinks.ynab import YnabClient
+
+    if getattr(args, "ynab_client", None) is None:
+        args.ynab_client = YnabClient(config.ynab_token())
+    return {
+        "client": args.ynab_client,
+        "budget_id": args.budget or config.ynab.get("budget_id") or "last-used",
+        "account_id": config.bank(bank.name).get("ynab_account_id"),
+        "import_id_prefix": config.import_id_prefix(bank),
+        "cleared": config.ynab.get("cleared") or "cleared",
+        "approved": bool(config.ynab.get("approved", False)),
+    }
+
+
 def _deliver(
     statement: Statement,
     bank: BankDefinition,
@@ -202,7 +223,20 @@ def _deliver(
     options: dict = {"dry_run": args.dry_run}
     if to == "moneymanager":
         options["date_format"] = args.date_format or config.output.get("date_format") or "%Y-%m-%d"
-    sink = factory(_output_path(args.out, config, bank, statement, suffix), **options)
+    if to == "ynab":
+        from .sinks.ynab import YnabError
+
+        try:
+            options.update(_ynab_options(args, config, bank))
+        except YnabError as exc:
+            print(f"ynab: {exc}", file=sys.stderr)
+            return 2
+    path = _output_path(args.out, config, bank, statement, suffix) if suffix else None
+    try:
+        sink = factory(path, **options)
+    except ValueError as exc:  # a setting the sink cannot use, e.g. a bad cleared state
+        print(f"{to}: {exc}", file=sys.stderr)
+        return 2
     result = sink.send(config.account_name(bank, args.account_name), rows)
     _print_result(result, args.dry_run)
     return 0 if result.ok else 1
@@ -315,7 +349,11 @@ def _add_output_options(parser: argparse.ArgumentParser) -> None:
                         help="output format (default: the config file's, else csv)")
     parser.add_argument("--out", help="output folder, or a .csv file path")
     parser.add_argument("--password", help="PDF password (default: the bank's env variable)")
-    parser.add_argument("--account-name", help="the Account column value (default: the bank's name)")
+    parser.add_argument("--account-name",
+                        help="the account in your tracker: Money Manager's Account column, "
+                             "or the YNAB account's name (default: the bank's name)")
+    parser.add_argument("--budget",
+                        help="YNAB budget ID, from the budget's web address (default: last-used)")
     parser.add_argument("--date-format", help="Money Manager date format (default: %%Y-%%m-%%d)")
     parser.add_argument("--dry-run", action="store_true", help="print the rows; write nothing")
     parser.add_argument("--skip-refunds", action="store_true",
@@ -332,7 +370,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     parser = argparse.ArgumentParser(
         prog="statement-etl-ph",
-        description="Read GCash, GoTyme and Grab statements into a CSV or a Money Manager import.",
+        description="Read GCash, GoTyme and Grab statements into a CSV, a Money Manager "
+                    "import, or YNAB.",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
     sub = parser.add_subparsers(dest="command", required=True)

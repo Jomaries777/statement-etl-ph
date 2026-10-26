@@ -4,8 +4,8 @@ Everything in it can also come from a flag or an environment variable; the
 file only saves typing them. Precedence, highest first: a command-line flag,
 the bank's environment variable (``GCASH_PDF_PASSWORD``, ...), the file.
 
-The file holds PDF passwords, so ``init`` creates it readable only by you, the
-same as the Gmail token.
+The file holds PDF passwords and can hold a YNAB token, so ``init`` creates it
+readable only by you, the same as the Gmail token.
 """
 
 from __future__ import annotations
@@ -18,11 +18,14 @@ from typing import Optional
 
 from .gmail.auth import config_dir, write_private
 
+# Read here rather than from sinks.ynab, so loading a config never imports a sink.
+YNAB_TOKEN_ENV = "YNAB_ACCESS_TOKEN"
+
 TEMPLATE = {
     "_comment": (
         "statement-etl-ph settings. Every value can also be a command-line flag; "
         "passwords can be environment variables instead (GCASH_PDF_PASSWORD, "
-        "GOTYME_PDF_PASSWORD). Delete the banks you do not use."
+        "GOTYME_PDF_PASSWORD, YNAB_ACCESS_TOKEN). Delete the banks you do not use."
     ),
     "banks": {
         "gcash": {"password": "", "account_name": "GCash"},
@@ -35,6 +38,7 @@ TEMPLATE = {
     },
     "output": {"to": "moneymanager", "dir": "~/Statements", "date_format": "%Y-%m-%d"},
     "gmail": {"since": "30d", "timezone": "Asia/Manila", "max_messages": 25},
+    "ynab": {"token": "", "budget_id": "last-used", "cleared": "cleared", "approved": False},
 }
 
 
@@ -47,6 +51,7 @@ class Config:
     banks: dict = field(default_factory=dict)
     output: dict = field(default_factory=dict)
     gmail: dict = field(default_factory=dict)
+    ynab: dict = field(default_factory=dict)
 
     def bank(self, name: str) -> dict:
         return self.banks.get(name) or {}
@@ -65,6 +70,17 @@ class Config:
         configured = self.bank(bank.name).get("attachment_patterns")
         return tuple(configured) if configured else bank.attachment_patterns
 
+    def ynab_token(self) -> str:
+        return os.environ.get(YNAB_TOKEN_ENV) or self.ynab.get("token", "")
+
+    def import_id_prefix(self, bank) -> str:
+        """The start of every YNAB import_id for this bank: ``GCASH:<reference>``.
+
+        Set it once. Changing it gives every past row a new import_id, and
+        YNAB would import the whole history again.
+        """
+        return self.bank(bank.name).get("import_id_prefix") or bank.name.upper()
+
 
 def load_config(path: Optional[Path] = None) -> Config:
     """The config file, or an empty config when there is none.
@@ -82,6 +98,7 @@ def load_config(path: Optional[Path] = None) -> Config:
         banks=raw.get("banks") or {},
         output=raw.get("output") or {},
         gmail=raw.get("gmail") or {},
+        ynab=raw.get("ynab") or {},
     )
 
 

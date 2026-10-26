@@ -16,7 +16,7 @@ the caller supplies, but never decides one.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Callable, Protocol
+from typing import Callable, Optional, Protocol
 
 from ..models import Transaction
 
@@ -30,7 +30,7 @@ class SendResult:
     # (duplicate key, why) for rows the sink could not take.
     skipped: list[tuple[str, str]] = field(default_factory=list)
     failed: list[tuple[str, str]] = field(default_factory=list)
-    # Where the rows went: a file path, for the file sinks.
+    # Where the rows went: a file path for the file sinks, an account for YNAB.
     location: str = ""
 
     @property
@@ -54,10 +54,18 @@ def _money_manager(path, **options) -> Sink:
     return MoneyManagerSink(path, **options)
 
 
-# name -> (factory, file suffix). Each factory takes the output path.
-SINKS: dict[str, tuple[Callable[..., Sink], str]] = {
+def _ynab(path, **options) -> Sink:
+    from .ynab import YnabSink
+
+    return YnabSink(**options)
+
+
+# name -> (factory, file suffix). Each factory takes the output path; a sink
+# that writes no file has no suffix and ignores it.
+SINKS: dict[str, tuple[Callable[..., Sink], Optional[str]]] = {
     "csv": (_csv, "csv"),
     "moneymanager": (_money_manager, "moneymanager.csv"),
+    "ynab": (_ynab, None),
 }
 
 
