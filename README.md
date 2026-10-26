@@ -1,10 +1,10 @@
 # statement-etl-ph
 
-Turn your **GCash**, **GoTyme** and **GrabPay** statements into a list of transactions you can actually use: a CSV for a spreadsheet, or a file you import straight into the **Money Manager** app.
+Turn your **GCash**, **GoTyme** and **GrabPay** statements into a list of transactions you can actually use: a CSV for a spreadsheet, a file you import straight into the **Money Manager** app, or transactions sent directly into your **YNAB** budget.
 
 Every statement is checked before anything is written. The rows it reads must add up to the totals the bank printed, so a misread statement stops instead of quietly putting wrong numbers into your budget.
 
-> **Only trust the official source.** The package is `statement-etl-ph` on PyPI and the code lives at <https://github.com/Jomaries777/statement-etl-ph>. This tool runs on your own computer. It never sends your statements, passwords or transactions to anyone. Be suspicious of any copy, fork or "helper" site that asks for them.
+> **Only trust the official source.** The package is `statement-etl-ph` on PyPI and the code lives at <https://github.com/Jomaries777/statement-etl-ph>. This tool runs on your own computer. It never sends your statements, passwords or transactions to anyone, except your transactions to YNAB when you choose `--to ynab`, and then only to `api.ynab.com` with your own token. Be suspicious of any copy, fork or "helper" site that asks for them.
 
 ## Quick start: one statement, no setup
 
@@ -58,6 +58,33 @@ Money Manager doesn't detect duplicates, so importing the same file twice import
 
 **`--to csv`**: one row per transaction with the signed amount, debit, credit, balance, reference number and a `duplicate_key` column. Writing into a CSV that already exists only appends rows whose key isn't there yet.
 
+**`--to ynab`**: sends the rows straight into a YNAB budget through YNAB's API. Nothing extra to install.
+
+1. **Create a token** in YNAB under **Account Settings → Developer Settings → New Token**, and keep it in the `YNAB_ACCESS_TOKEN` environment variable (or under `ynab.token` in the config file, which only you can read).
+2. **Name the account.** The YNAB account must be called `GCash`, `GoTyme` or `GrabPay`, or pass `--account-name` (or set `account_name` for the bank in the config file) to match yours.
+3. **Pick the budget** with `--budget` (the ID in the budget's web address) or `ynab.budget_id` in the config file. The default is the budget you opened last.
+4. **Try it:**
+   ```bash
+   statement-etl-ph statement.pdf --bank gcash --to ynab --dry-run
+   statement-etl-ph statement.pdf --bank gcash --to ynab
+   ```
+   A dry run still asks YNAB for your accounts, to check the token, budget and account, but sends no transactions.
+
+| YNAB field | Value |
+|---|---|
+| Date | the transaction date on the statement |
+| Amount | money out is negative, money in positive |
+| Payee | the merchant |
+| Memo | the bank's reference, e.g. `ref 0000100000066` |
+| Category | blank, for YNAB's payee rules or you to fill in |
+| Cleared / Approved | `cleared` and not approved, so each row waits for your review; change them with `ynab.cleared` (`cleared`, `uncleared` or `reconciled`) and `ynab.approved` |
+
+**Sending a statement twice is safe.** Every row carries an import ID built from the bank's reference number, such as `GCASH:0000100000066`, and YNAB refuses an import ID it has already seen in that account. The second run reports the rows as already there. The prefix can be changed per bank with `import_id_prefix` in the config file, but only before your first import: changing it later makes YNAB import every old row again.
+
+Good to know:
+- A transfer between two of your own accounts (GCash to GoTyme, say) arrives as two separate rows, one in each account. Link them in YNAB if you want them shown as a transfer.
+- YNAB allows 200 requests an hour per token. A statement costs two: one to find the account, one to send the rows.
+
 ## Level up: fetch statements from Gmail automatically
 
 Instead of downloading each PDF, let the tool find statement emails in your Gmail, check they really came from the bank, and convert them.
@@ -85,7 +112,7 @@ This tool has no shared Google login. You create your own, so nobody else's app 
 
 The token is saved to `~/.config/statement-etl-ph/token.json`, readable only by you. Revoke it any time at [myaccount.google.com/permissions](https://myaccount.google.com/permissions).
 
-**Read-only option:** `statement-etl-ph auth client_secret.json --readonly` never changes your mailbox. Processed emails aren't labelled, so each run sees them again. For CSV output, the duplicate key stops rows being added twice; a Money Manager file is simply rewritten.
+**Read-only option:** `statement-etl-ph auth client_secret.json --readonly` never changes your mailbox. Processed emails aren't labelled, so each run sees them again. For CSV output, the duplicate key stops rows being added twice; YNAB refuses import IDs it already has; a Money Manager file is simply rewritten.
 
 ### Your bank mail goes somewhere other than Gmail?
 
@@ -115,6 +142,18 @@ for txn in statement.transactions:
 ```
 
 Amounts are `Decimal`, never floats.
+
+To send rows to YNAB with categories your own code has decided, pass them per row. The package never decides one:
+
+```python
+from statement_etl_ph.sinks.ynab import YnabFields, YnabSink
+
+sink = YnabSink(token=token, import_id_prefix="GCASH", budget_id="last-used")
+fields = {txn: YnabFields(category_id="...") for txn in statement.transactions}
+result = sink.send("GCash", statement.transactions, fields=fields)
+```
+
+`YnabFields` also takes a `memo`, a `payee_name`, or a `payee_id` (an account's `Transfer : <account>` payee, which is how YNAB records a transfer).
 
 ## Never share a real statement
 

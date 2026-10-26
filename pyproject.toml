@@ -4,14 +4,14 @@ build-backend = "hatchling.build"
 
 [project]
 name = "statement-etl-ph"
-version = "0.1.1"
-description = "Read GCash, GoTyme and Grab statements into checked transactions, a CSV, or a Money Manager import."
+version = "0.2.0"
+description = "Read GCash, GoTyme and Grab statements into checked transactions, a CSV, a Money Manager import, or YNAB."
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
 requires-python = ">=3.10"
 authors = [{ name = "statement-etl-ph contributors" }]
-keywords = ["gcash", "gotyme", "grab", "philippines", "bank statement", "pdf", "budget"]
+keywords = ["gcash", "gotyme", "grab", "philippines", "bank statement", "pdf", "budget", "ynab"]
 classifiers = [
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",

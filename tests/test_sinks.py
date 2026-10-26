@@ -154,5 +154,5 @@ def test_appending_the_same_statement_adds_nothing(tmp_path, statement):
 
 def test_the_sink_list_is_fixed():
     """Nothing is discovered from other installed packages."""
-    assert available() == ["csv", "moneymanager"]
-    assert set(SINKS) == {"csv", "moneymanager"}
+    assert available() == ["csv", "moneymanager", "ynab"]
+    assert set(SINKS) == {"csv", "moneymanager", "ynab"}

@@ -29,9 +29,10 @@ statement-etl-ph init
 This writes `~/.config/statement-etl-ph/statement-etl-ph.json`, also readable only by you. Fill in:
 
 - each bank's `password` (or leave it empty and set `GCASH_PDF_PASSWORD` / `GOTYME_PDF_PASSWORD` instead)
-- `account_name`, if your Money Manager account is named differently
-- `output.to` (`moneymanager` or `csv`) and `output.dir`
+- `account_name`, if your Money Manager or YNAB account is named differently
+- `output.to` (`moneymanager`, `csv` or `ynab`) and `output.dir`
 - `gmail.since`: how far back to search (`30d`, `2w`, `yesterday`, `all`)
+- for YNAB, `ynab.token` (or set `YNAB_ACCESS_TOKEN` instead) and `ynab.budget_id`. A scheduler doesn't load your shell's environment variables, so a scheduled run is simplest with the token in this file.
 
 Remove the banks you don't use: `fetch` with no `--bank` reads every bank listed.
 

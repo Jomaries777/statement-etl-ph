@@ -35,7 +35,7 @@ jobs:
           python-version: "3.12"
       - run: pip install .
       - run: statement-etl-ph --version
-      - run: python -c "import statement_etl_ph.banks, statement_etl_ph.cli, statement_etl_ph.sinks.money_manager"
+      - run: python -c "import statement_etl_ph.banks, statement_etl_ph.cli, statement_etl_ph.sinks.money_manager, statement_etl_ph.sinks.ynab"
       - name: Fail if the Google client came along
         run: "! pip show google-api-python-client"
 

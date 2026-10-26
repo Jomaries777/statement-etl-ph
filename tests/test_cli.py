@@ -18,7 +18,7 @@ def _isolated(tmp_path, monkeypatch):
     """No test may read the developer's own config, token or env passwords."""
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config-home"))
     for name in ("GCASH_PDF_PASSWORD", "GOTYME_PDF_PASSWORD", "GMAIL_CLIENT_ID",
-                 "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN"):
+                 "GMAIL_CLIENT_SECRET", "GMAIL_REFRESH_TOKEN", "YNAB_ACCESS_TOKEN"):
         monkeypatch.delenv(name, raising=False)
 
 
@@ -113,6 +113,7 @@ def test_init_writes_a_private_template_with_no_secrets(tmp_path):
     assert path.stat().st_mode & 0o777 == 0o600
     template = json.loads(path.read_text())
     assert all(not bank.get("password") for bank in template["banks"].values())
+    assert not template["ynab"]["token"]
     assert cli.main(["init", "--config", str(path)]) == 1, "never overwrites by default"
 
 
