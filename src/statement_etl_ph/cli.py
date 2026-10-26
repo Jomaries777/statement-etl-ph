@@ -316,11 +316,12 @@ def cmd_fetch(args: argparse.Namespace, config: Config) -> int:
 def cmd_auth(args: argparse.Namespace, config: Config) -> int:
     from .gmail.auth import default_token_path, run_consent_flow, save_token
 
-    secrets = Path(args.client_secrets).expanduser()
-    if not secrets.exists():
-        print(f"no such file: {secrets}", file=sys.stderr)
+    # The path to the OAuth client file, never its contents.
+    client_file = Path(args.client_file).expanduser()
+    if not client_file.exists():
+        print(f"no such file: {client_file}", file=sys.stderr)
         return 2
-    token = run_consent_flow(secrets, readonly=args.readonly)
+    token = run_consent_flow(client_file, readonly=args.readonly)
     path = Path(args.token).expanduser() if args.token else default_token_path()
     save_token(path, token)
     scope = "read-only" if args.readonly else "read and label (gmail.modify)"
@@ -393,7 +394,8 @@ def build_parser() -> argparse.ArgumentParser:
 
     a = sub.add_parser("auth", parents=[common],
                        help="sign in to Gmail once and save the token (needs [gmail])")
-    a.add_argument("client_secrets", help="the client_secret.json of your Desktop OAuth client")
+    a.add_argument("client_file", metavar="client_secret.json",
+                   help="the client_secret.json of your Desktop OAuth client")
     a.add_argument("--readonly", action="store_true",
                    help="read-only access: processed messages are not labelled")
     a.add_argument("--token", help="where to save the token")
